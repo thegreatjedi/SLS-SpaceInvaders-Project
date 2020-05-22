@@ -100,10 +100,9 @@ if __name__ == "__main__":
         retry = True
         while retry:
             try:
-                main(game_name=game_name, num_timesteps=10000,
-                     num_episodes=10, dir_name="trpo-policies",
+                main(game_name=game_name, num_timesteps=100000,
+                     num_episodes=100, dir_name="trpo-policies",
                      model_name=policy, policy=policy)
                 retry = False
             except EOFError:
                 pass
-        break
