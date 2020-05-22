@@ -3,7 +3,7 @@ import os
 import numpy as np
 import retro
 import tensorflow as tf
-from stable_baselines import PPO2
+from stable_baselines import TRPO
 from stable_baselines.common.vec_env import DummyVecEnv
 
 from util import get_valid_filename
@@ -14,14 +14,14 @@ def make_vec_env(env_id):
     def make_env():
         def _init():
             return retro.make(env_id)
+        
         return _init
     
     return DummyVecEnv([make_env()])
 
 
 def main(game_name, num_timesteps, num_episodes, dir_name, model_name,
-         policy, discount=0.99, batch_size=128, learn_rate=0.00025):
-    dir_name = get_valid_filename(dir_name)
+         policy, discount=0.99, batch_size=1024):
     model_name = get_valid_filename(model_name)
     
     eval_log_dir = f"logs/{dir_name}/{model_name}"
@@ -34,12 +34,12 @@ def main(game_name, num_timesteps, num_episodes, dir_name, model_name,
     env = make_vec_env(game_name)
     env.seed(309)
     
-    model = PPO2(policy=policy, env=env, gamma=discount, n_steps=batch_size,
-                 learning_rate=learn_rate, verbose=1, seed=309,
+    model = TRPO(policy=policy, env=env, gamma=discount,
+                 timesteps_per_batch=batch_size, verbose=1, seed=309,
                  tensorboard_log=tr_log_dir, n_cpu_tf_sess=1)
     model.learn(total_timesteps=num_timesteps)
     model.save(f"{model_dir}/{model_name}")
-
+    
     eps_done = 0
     ep_rewards = np.array([0] * num_episodes)
     curr_rewards = 0
@@ -80,7 +80,7 @@ def main(game_name, num_timesteps, num_episodes, dir_name, model_name,
         rew = ep_rewards[i]
         sess.run(rew_var.assign(rew))
         summary_writer.add_summary(sess.run(rew_val), i)
-        
+    
     avg_var = tf.Variable(0.0, dtype=tf.float64)
     avg_val = tf.summary.scalar(f"Trimmed Average ({model_name})", avg_var)
     sess.run(avg_var.assign(avg_reward))
@@ -100,9 +100,10 @@ if __name__ == "__main__":
         retry = True
         while retry:
             try:
-                main(game_name=game_name, num_timesteps=100000,
-                     num_episodes=100, dir_name="ppo2-policies",
+                main(game_name=game_name, num_timesteps=10000,
+                     num_episodes=10, dir_name="trpo-policies",
                      model_name=policy, policy=policy)
                 retry = False
             except EOFError:
                 pass
+        break
