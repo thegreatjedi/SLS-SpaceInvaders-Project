@@ -20,8 +20,9 @@ def make_vec_env(env_id):
     return DummyVecEnv([make_env()])
 
 
-def main(game_name, num_timesteps, num_episodes, dir_name, model_name,
+def main(game, num_timesteps, num_episodes, dir_name, model_name,
          policy, discount=0.99, batch_size=1024):
+    dir_name = get_valid_filename(dir_name)
     model_name = get_valid_filename(model_name)
     
     eval_log_dir = f"logs/{dir_name}/{model_name}"
@@ -31,7 +32,7 @@ def main(game_name, num_timesteps, num_episodes, dir_name, model_name,
     os.makedirs(tr_log_dir, exist_ok=True)
     os.makedirs(model_dir, exist_ok=True)
     
-    env = make_vec_env(game_name)
+    env = make_vec_env(game)
     env.seed(309)
     
     model = TRPO(policy=policy, env=env, gamma=discount,
@@ -52,10 +53,10 @@ def main(game_name, num_timesteps, num_episodes, dir_name, model_name,
         action, _ = model.predict(obs)
         obs, reward, done, info = env.step(action)
         env.render(mode="human")
-        curr_rewards[0] += reward[0]
+        curr_rewards += reward[0]
         if done[0]:
-            ep_rewards[eps_done] = curr_rewards[0]
-            curr_rewards[0] = 0
+            ep_rewards[eps_done] = curr_rewards
+            curr_rewards = 0
             eps_done += 1
     print("All episodes completed")
     env.close()
@@ -100,7 +101,7 @@ if __name__ == "__main__":
         retry = True
         while retry:
             try:
-                main(game_name=game_name, num_timesteps=100000,
+                main(game=game_name, num_timesteps=100000,
                      num_episodes=100, dir_name="trpo-policies",
                      model_name=policy, policy=policy)
                 retry = False
