@@ -4,23 +4,23 @@ import numpy as np
 import retro
 import tensorflow as tf
 from stable_baselines import PPO2
-from stable_baselines.common.vec_env import DummyVecEnv
+from stable_baselines.common.vec_env import SubprocVecEnv
 
 from util import get_valid_filename
 
 
-def make_vec_env(env_id):
+def make_vec_env(env_id, num_envs):
     # stable-baselines built-in make_vec_env converted to work with retro
     def make_env():
         def _init():
             return retro.make(env_id)
         return _init
     
-    return DummyVecEnv([make_env()])
+    return SubprocVecEnv([make_env() for _ in range(num_envs)])
 
 
-def main(game_name, num_timesteps, num_episodes, dir_name, model_name,
-         policy, discount=0.99, batch_size=128, learn_rate=0.00025):
+def main(game, num_timesteps, num_episodes, dir_name, model_name, policy,
+         discount=0.99, batch_size=128, learn_rate=0.00025, num_envs=4):
     dir_name = get_valid_filename(dir_name)
     model_name = get_valid_filename(model_name)
     
@@ -31,7 +31,7 @@ def main(game_name, num_timesteps, num_episodes, dir_name, model_name,
     os.makedirs(tr_log_dir, exist_ok=True)
     os.makedirs(model_dir, exist_ok=True)
     
-    env = make_vec_env(game_name)
+    env = make_vec_env(game, num_envs)
     env.seed(309)
     
     model = PPO2(policy=policy, env=env, gamma=discount, n_steps=batch_size,
@@ -42,7 +42,7 @@ def main(game_name, num_timesteps, num_episodes, dir_name, model_name,
 
     eps_done = 0
     ep_rewards = np.array([0] * num_episodes)
-    curr_rewards = 0
+    curr_rewards = [0] * num_envs
     obs = env.reset()
     while eps_done != num_episodes:
         if eps_done % 10 == 0:
@@ -52,11 +52,13 @@ def main(game_name, num_timesteps, num_episodes, dir_name, model_name,
         action, _ = model.predict(obs)
         obs, reward, done, info = env.step(action)
         env.render(mode="human")
-        curr_rewards[0] += reward[0]
-        if done[0]:
-            ep_rewards[eps_done] = curr_rewards[0]
-            curr_rewards[0] = 0
-            eps_done += 1
+        
+        for i in range(num_envs):
+            curr_rewards[i] += reward[i]
+            if done[i]:
+                ep_rewards[eps_done] = curr_rewards[i]
+                curr_rewards[i] = 0
+                eps_done += 1
     print("All episodes completed")
     env.close()
     
@@ -93,16 +95,18 @@ def main(game_name, num_timesteps, num_episodes, dir_name, model_name,
 
 if __name__ == "__main__":
     game_name = "SpaceInvaders-Snes"
-    
-    policies = ["MlpPolicy", "MlpLstmPolicy", "MlpLnLstmPolicy",
-                "CnnPolicy", "CnnLstmPolicy", "CnnLnLstmPolicy"]
-    for policy in policies:
-        retry = True
-        while retry:
-            try:
-                main(game_name=game_name, num_timesteps=100000,
-                     num_episodes=100, dir_name="ppo2-policies",
-                     model_name=policy, policy=policy)
-                retry = False
-            except EOFError:
-                pass
+    policy_name = "MlpLnLstmPolicy"
+    dct_factors = [0.1, 0.4, 0.5, 0.8]
+    batches = [64, 128, 256, 512, 1024]
+    for dct in dct_factors:
+        for batch in batches:
+            retry = True
+            while retry:
+                try:
+                    main(game=game_name, num_timesteps=100000,
+                         num_episodes=100, dir_name="ppo2-discount",
+                         model_name=f"{policy_name}-{dct}-{batch}",
+                         policy=policy_name, discount=dct, batch_size=batch)
+                    retry = False
+                except EOFError:
+                    pass
