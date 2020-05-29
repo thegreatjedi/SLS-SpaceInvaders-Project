@@ -1,4 +1,5 @@
-tensorflow==1.15.2
-tensorflow-gpu==1.15.2
 gym-retro==0.8.0
-stable-baselines==2.10.0
+stable_baselines==2.10.0
+mpi4py==3.0.3
+tensorflow==1.15.3
+tensorflow-gpu==1.15.3
